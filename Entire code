@@ -1,0 +1,341 @@
+install.packages('DT')
+install.packages('shinyBS')
+install.packages('shinydashboard')
+install.packages('shinyjs')
+library(shiny)
+library(tidyverse)
+library(shinydashboard)
+library(shinyBS)
+library(shinyjs)
+library(DT)
+library(stringr)
+library(gridExtra)
+
+
+
+master <- read.csv('Master1.csv')
+
+master <- Master1
+
+master <- rename(master, N = X)
+
+Spin <- read.csv('Spin_hopeful.csv')
+
+Spin <- Spin_hopeful
+
+Master_spun <- merge(x = master, y = Spin, by = "N")
+
+Master_spun$eff <- as.numeric(Master_spun$eff)
+
+class(Master_spun$eff)
+
+Master_spun <- Master_spun %>% 
+  mutate(diff = case_when(
+    `Pitch.Type` == "Four Seam Fastball" & Pitcher.Handedness == 'L' ~ 37 - 37*eff,
+    `Pitch.Type` == "Curveball" & Pitcher.Handedness == 'L' ~ -19 + 23*eff,
+    `Pitch.Type` == "Slider"& Pitcher.Handedness == 'L'  ~ -51 + 99*eff,
+    `Pitch.Type` == "Splitter" & Pitcher.Handedness == 'L' ~ eff*0,
+    `Pitch.Type` == "Changeup" & Pitcher.Handedness == 'L' ~ 57 - 53*eff,
+    `Pitch.Type` == "Sinker" & Pitcher.Handedness == 'L' ~ 77 - 65*eff,
+    `Pitch.Type` == "Two Seam Fastball" & Pitcher.Handedness == 'L' ~ 0*eff,
+    `Pitch.Type` == "Split Change" & Pitcher.Handedness == 'L' ~ eff*0,
+    `Pitch.Type` == "Knuckle Curve" & Pitcher.Handedness == 'L' ~ -19 + 23*eff,
+    `Pitch.Type` == "Slurve" & Pitcher.Handedness == 'L' ~ 0*eff,
+    `Pitch.Type` == "Four Seam Fastball" & Pitcher.Handedness == 'R' ~ 33 - 33*eff,
+    `Pitch.Type` == "Curveball" & Pitcher.Handedness == 'R' ~ 28 - 33*eff,
+    `Pitch.Type` == "Slider"& Pitcher.Handedness == 'R'  ~ 52 - 110*eff,
+    `Pitch.Type` == "Splitter" & Pitcher.Handedness == 'R' ~ eff*0,
+    `Pitch.Type` == "Changeup" & Pitcher.Handedness == 'R' ~ -66 + 59*eff,
+    `Pitch.Type` == "Sinker" & Pitcher.Handedness == 'R' ~ -75 + 58*eff,
+    `Pitch.Type` == "Two Seam Fastball" & Pitcher.Handedness == 'R' ~ 0*eff,
+    `Pitch.Type` == "Split Change" & Pitcher.Handedness == 'R' ~ eff*0,
+    `Pitch.Type` == "Knuckle Curve" & Pitcher.Handedness == 'R' ~ 28 - 33*eff,
+    `Pitch.Type` == "Slurve" & Pitcher.Handedness == 'R' ~ 0*eff,
+    TRUE ~ eff*0,
+  )
+  )
+
+Master_spun <- Master_spun %>% 
+  mutate(xObservedDirect = diff + Pitch.Spin.Direction..ø.)
+
+Master_spun <- Master_spun %>%
+  filter(xObservedDirect <= 360)
+
+Master_spun <- Master_spun %>%
+  filter(xObservedDirect >= 0)
+
+bas_pitchers_matchup <- Master_spun %>% 
+  group_by(Pitcher, Batter) %>%
+  filter(!is.na(Pitch.Call)) %>%
+  summarise(Team = Pitcher.Team, Pitches = n(), 
+            PA = sum(Pitch.Call %in% c('Walk', 'Called Strikeout', 'Single', 'Error', 'Contact Out', 'Swinging Strikeout', 'Hit by Pitch', 'Home Run', 'Double', 'Triple'), na.rm = TRUE),
+            AB = sum(Pitch.Call %in% c('Called Strikeout', 'Single', 'Error', 'Contact Out', 'Swinging Strikeout', 'Home Run', 'Double', 'Triple'), na.rm = TRUE), 
+            H = sum(Pitch.Call %in% c('Single', 'Double', 'Triple', 'Home Run'), na.rm = TRUE),
+            OB = sum(Pitch.Call %in% c('Single', 'Double', 'Triple', 'Home Run', 'Walk', 'Hit by Pitch'), na.rm = TRUE),
+            TB = (sum(Pitch.Call == 'Single', na.rm = TRUE) + 2*(sum(Pitch.Call == 'Double', na.rm = TRUE)) + 3*(sum(Pitch.Call == 'Triple', na.rm = TRUE)) + 4*(sum(Pitch.Call == 'Home Run', na.rm = TRUE))),
+            '1B' = sum(Pitch.Call == 'Single', na.rm = TRUE),
+            '2B' = sum(Pitch.Call == 'Double', na.rm = TRUE),
+            'BB' = sum(Pitch.Call == 'Walk', na.rm = TRUE),
+            '3B' = sum(Pitch.Call == 'Triple', na.rm = TRUE),
+            'HR' = sum(Pitch.Call == 'Home Run', na.rm = TRUE),
+            K = sum(Pitch.Call %in% c('Called Strikeout', 'Swinging Strikeout'), na.rm = TRUE),
+            'Avg Exit Velo' = mean(Hit.Ball.Speed..mph.),
+            AVG = round(H/AB, 3),
+            OBP = round(OB/PA, 3),
+            SLG = round(TB / AB, 3)) %>%
+  distinct() %>% select(-OB, -TB)
+
+
+
+Zones <- Master_spun %>%
+  mutate(Heart = case_when(
+    px..ft. >= 1.16 & px..ft. <= 2.3 & pz..ft. >= 1.83 & pz..ft. <= 3.2 ~ 1,
+    TRUE ~ 0,
+  )
+  ) %>%
+  mutate(Shadow = case_when(
+    px..ft. >= 0.75 & px..ft. <= 2.95 & pz..ft. >= 1.17 & pz..ft. <= 3.83 & Heart != 1 ~ 1,
+    TRUE ~ 0,
+  )
+  ) %>%
+  mutate(Chase = case_when(
+    px..ft. >= 0.183 & px..ft. <= 3.51 & pz..ft. >= 0.5 & pz..ft. <= 4.5 & Shadow != 1 & Heart != 1 ~ 1,
+    TRUE ~ 0,
+  )
+  ) %>%
+  mutate(Waste = case_when(
+    Heart != 1 & Shadow != 1 & Chase != 1 ~ 1,
+    TRUE ~ 0,
+  )
+  )
+
+
+Zones_grouped <- Zones %>% 
+  group_by(Pitcher) %>%
+  filter(!is.na(Pitch.Call)) %>%
+  summarise('Heart%' = sum(Heart)/n(),
+            'Shadow%' = sum(Shadow)/n(),
+            'Chase%' = sum(Chase)/n(),
+            'Waste%' = sum(Waste)/n()) %>%
+  distinct()
+
+
+
+rosters <- X2022_Rosters_Sheet1
+
+rosters <- read_csv("2022 Rosters - Sheet1.csv") 
+
+
+
+##########
+
+
+ui <- dashboardPage(
+  dashboardHeader(title = "USPBL"),
+  
+  dashboardSidebar(
+    sidebarMenu(
+      menuItem("Pitchers",
+               tabName = "pitchers_Tab",
+               icon = icon("baseball-ball")))),
+  
+  dashboardBody(
+    tabItems(
+      tabItem(tabName = "pitchers_Tab",
+              fluidRow(box(uiOutput("team_selector"), 
+                           uiOutput("pitcher_selector"), status = "success", width = 3),
+                       box(title = "Pitcher Info", width = 9, status = "success",
+                           column(10, DT::dataTableOutput("info_P"))),
+                       box(title = "Pitch Movement",
+                           strong("Pitcher's Perspective"),
+                           plotOutput("pit_zone"),
+                           status = "success", width = 11),
+                       box(title = "Spin Direction",
+                           strong("Catcher's Perspective"),
+                           plotOutput("spin_plot"),
+                           status = "success", width = 6),
+                       box(title = "xObserved Spin Direction",
+                           strong("Catcher's Perspective"),
+                           plotOutput("spin_plot_2"),
+                           status = "success", width = 6),
+                       box(title = "Zone Stats", status = "success",
+                           DT::dataTableOutput("zone_table"), width = 11),
+                       box(uiOutput("opp_team_selector"),
+                       uiOutput("opp_batter_selector"), status = "success", width = 3),
+              box(title = "Batter Info", width = 9, status = "success",
+                  column(10, DT::dataTableOutput("info_B"))),
+              fluidRow(box(title = "Matchup Stats", status = "success",
+                           DT::dataTableOutput("matchup_table"), width = 9),
+      )
+    )
+  )
+)
+)
+)
+
+server <- function(input, output) {
+  
+  #######
+  
+  # Pitcher Team selector
+  output$team_selector <- renderUI({
+    
+    p <- Master_spun %>% pull(Pitcher.Team) %>% unique
+    
+    selectInput(inputId = "team_selector",
+                label = "Select a Team",
+                choices = p,
+                selected = "Unicorns")
+  })
+  
+  #Pitcher Selector
+  output$pitcher_selector <- renderUI({
+    req(input$team_selector)
+    
+    p <- Master_spun %>% filter(Pitcher.Team == input$team_selector) %>% pull(Pitcher)
+    
+    selectInput(inputId = "pitcher_selector",
+                label = "Select a Pitcher",
+                choices = p,
+                selected = "Justin Rasmussen")
+  })
+  
+  # Pitcher info
+  output$info_P <- DT::renderDataTable({
+    req(input$pitcher_selector)
+    
+    DT::datatable(
+      rosters %>% filter(Name == input$pitcher_selector) %>% 
+        select(Team, Jersey, Position, B, `T`, HT, WT),
+      options = list(paging = FALSE, searching = FALSE,
+                     scrollX=TRUE, dom='t',ordering=F,
+                     columnDefs = list(list(className = 'dt-center', targets = '_all'))),
+      rownames= FALSE,
+      selection = "none"
+    )
+  })
+  
+  # Batter info
+  output$info_B <- DT::renderDataTable({
+    req(input$opp_batter_selector)
+    
+    DT::datatable(
+      rosters %>% filter(Name == input$opp_batter_selector) %>% 
+        select(Team, Jersey, Position, B, `T`, HT, WT),
+      options = list(paging = FALSE, searching = FALSE,
+                     scrollX=TRUE, dom='t',ordering=F,
+                     columnDefs = list(list(className = 'dt-center', targets = '_all'))),
+      rownames= FALSE,
+      selection = "none"
+    )
+  })
+  
+  
+  
+#Spin Plot
+  
+  output$spin_plot <- renderPlot({
+    req(input$pitcher_selector)
+    pitcher <- input$pitcher_selector
+    ##############
+    Master_spun %>% filter(Pitcher == pitcher) %>%
+      ggplot(aes(y = Pitch.Spin.Direction..ø., fill = `Pitch.Type`)) +
+      geom_histogram(binwidth = 10) +
+      coord_polar("y", start = -0.1)
+    
+  })
+  
+#xSpin Plot
+  
+  output$spin_plot_2 <- renderPlot({
+    req(input$pitcher_selector)
+    pitcher <- input$pitcher_selector
+    ##############
+  Master_spun %>% filter(Pitcher == pitcher) %>%
+    ggplot(aes(y = xObservedDirect, width = 15, fill = `Pitch.Type`)) +
+    geom_histogram(binwidth = 10) +
+    coord_polar("y", start = -0.1)
+    
+  })
+  
+#Movement Plot
+  
+  output$pit_zone <- renderPlot({
+    req(input$pitcher_selector)
+    pitcher <- input$pitcher_selector
+    ##############
+    Master_spun %>% filter(Pitcher == pitcher) %>%
+      ggplot(aes(Pitch.Break..H...in., Pitch.Break.Ind..V...in. , color = Pitch.Type)) +
+      geom_point() +
+      xlim(-30, 30) + ylim(-30, 30) +
+      geom_vline(xintercept = 0) +
+      geom_hline(yintercept = 0)
+    
+  })
+  
+  #Zone Stats Datatable 
+  output$zone_table <- DT::renderDataTable({
+    req(input$pitcher_selector)
+    
+    DT::datatable(
+      Zones_grouped %>% filter(Pitcher == input$pitcher_selector) %>% select (-Pitcher),
+      options = list(paging = FALSE, searching = FALSE,
+                     scrollX=TRUE, dom='t',ordering=F,
+                     columnDefs = list(list(className = 'dt-center', targets = '_all'))),
+      rownames= FALSE,
+      selection = "none"
+    )
+  })
+  
+  
+  
+  
+  #Opp Team selector
+  output$opp_team_selector <- renderUI({
+    req(input$pitcher_selector)
+    
+    p <- Master_spun %>% filter(Pitcher == input$pitcher_selector) %>% pull(Batter.Team) %>% unique
+    
+    selectInput(inputId = "opp_team_selector",
+                label = "Select a Team",
+                choices = p,
+                selected = "Unicorns")
+  })
+  
+  #Opp Batter selector
+  output$opp_batter_selector <- renderUI({
+    req(input$opp_team_selector)
+    
+    p <- Master_spun %>% filter(Batter.Team == input$opp_team_selector) %>% pull(Batter)
+    
+    selectInput(inputId = "opp_batter_selector",
+                label = "Select a Batter",
+                choices = p,
+                selected = "Frankie Lucska")
+  })
+  
+  #Matchup data 
+  
+  output$matchup_table <- DT::renderDataTable({
+    req(input$pitcher_selector, input$opp_batter_selector)
+    
+    DT::datatable(
+      bas_pitchers_matchup %>% filter(Pitcher == input$pitcher_selector, Batter == input$opp_batter_selector) %>% select(-Pitcher, -Batter, -Team, -'3B'),
+      options = list(paging = FALSE, searching = FALSE,
+                     scrollX=TRUE, dom='t',ordering=F,
+                     columnDefs = list(list(className = 'dt-center', targets = '_all'))),
+      rownames= FALSE,
+      selection = "none"
+    )
+  })
+  
+}
+
+
+
+
+shinyApp(ui = ui, server = server)
+
+
+
+
