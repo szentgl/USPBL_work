@@ -1,0 +1,87 @@
+install.packages("caret", dependencies=c("Depends", "Suggests"))
+library(caret)
+library(ggplot2)
+library(dplyr)
+library(tidyverse)
+library(ggpubr)
+
+spin <- spin_direction_pitches_1_
+
+### LEFT HANDED PITCHERS
+
+spin_L <- spin %>%
+  filter(pitch_hand == 'L')
+
+goodColumns <- c('alan_active_spin_pct', 'diff_measured_inferred', 'api_pitch_type')
+
+inTrain <- createDataPartition(spin_L$diff_measured_inferred,p=0.7,list = FALSE)
+training <- spin_L[inTrain,goodColumns]
+testing <- spin_L[-inTrain,goodColumns]
+
+method = 'lm'
+
+ctrl <- trainControl(method = 'repeatedcv', number = 10, repeats = 10)
+modelFit <- train(diff_measured_inferred ~ ., method = method, data = training, trControl = ctrl)
+
+summary(modelFit)
+
+predicted2 <- predict(modelFit, newdata = testing)
+
+cor(testing$diff_measured_inferred, predicted2)^2
+
+plot(testing$diff_measured_inferred, predicted2,
+     main = "gabagool")
+
+spin_L$api_pitch_type
+
+ggplot(data = testing, aes(x = predicted2, y = diff_measured_inferred)) +
+  geom_point() +
+  facet_wrap(~ api_pitch_type) +
+  geom_smooth()
+       
+
+ggplot(data = spin_L, aes(alan_active_spin_pct, diff_measured_inferred)) +
+  geom_point()+
+  geom_smooth()+
+  facet_wrap(~api_pitch_type) +
+  stat_regline_equation(label.y = 400, aes(label = ..eq.label..))
+
+
+### RIGHT HANDED PITCHERS
+
+spin_R <- spin %>%
+  filter(pitch_hand == 'R')
+
+goodColumns <- c('alan_active_spin_pct', 'diff_measured_inferred', 'api_pitch_type')
+
+inTrain <- createDataPartition(spin_R$diff_measured_inferred,p=0.7,list = FALSE)
+training <- spin_R[inTrain,goodColumns]
+testing <- spin_R[-inTrain,goodColumns]
+
+method = 'lm'
+
+ctrl <- trainControl(method = 'repeatedcv', number = 10, repeats = 10)
+modelFit <- train(diff_measured_inferred ~ ., method = method, data = training, trControl = ctrl)
+
+summary(modelFit)
+
+predicted2 <- predict(modelFit, newdata = testing)
+
+cor(testing$diff_measured_inferred, predicted2)^2
+
+plot(testing$diff_measured_inferred, predicted2,
+     main = "gabagool")
+
+
+ggplot(data = testing, aes(x = predicted2, y = diff_measured_inferred)) +
+  geom_point() +
+  facet_wrap(~ api_pitch_type) +
+  geom_smooth() 
+
+
+ggplot(data = spin_R, aes(alan_active_spin_pct, diff_measured_inferred)) +
+  geom_point()+
+  geom_smooth()+
+  facet_wrap(~api_pitch_type) +
+  stat_regline_equation(label.y = 400, aes(label = ..eq.label..))
+
