@@ -1,0 +1,45 @@
+##Making a strikezone
+
+Strikes_test <- Master_spun %>%
+  mutate(Strike_rulebook = case_when(
+    px..ft. >= 1 & px..ft. <= 2.7 & pz..ft. >= 1.5 & pz..ft. <= 3.5 ~ 1,
+    TRUE ~ 0,
+  )
+  )
+
+
+
+df <- data.frame(Strikes_test$Pitch.Call, Strikes_test$Strike_rulebook)
+
+View(df)
+
+##Visualizing our strikezone
+
+Strikes_test %>% filter(Pitch.Call == 'Called Strike') %>%
+  ggplot(aes(px..ft., pz..ft. , color = Strike_rulebook)) +
+  geom_point()
+
+
+#Creating Zones
+
+Zones <- Master_spun %>%
+  mutate(Heart = case_when(
+    px..ft. >= 1.16 & px..ft. <= 2.3 & pz..ft. >= 1.83 & pz..ft. <= 3.2 ~ 1,
+    TRUE ~ 0,
+  )
+  ) %>%
+  mutate(Shadow = case_when(
+    px..ft. >= 0.75 & px..ft. <= 2.95 & pz..ft. >= 1.17 & pz..ft. <= 3.83 & Heart != 1 ~ 1,
+    TRUE ~ 0,
+  )
+  ) %>%
+  mutate(Chase = case_when(
+    px..ft. >= 0.183 & px..ft. <= 3.51 & pz..ft. >= 0.5 & pz..ft. <= 4.5 & Shadow != 1 & Heart != 1 ~ 1,
+    TRUE ~ 0,
+  )
+  ) %>%
+  mutate(Waste = case_when(
+    Heart != 1 & Shadow != 1 & Chase != 1 ~ 1,
+    TRUE ~ 0,
+  )
+  )
